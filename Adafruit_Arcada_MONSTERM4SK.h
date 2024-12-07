@@ -1,7 +1,7 @@
 #if defined(ADAFRUIT_MONSTER_M4SK_EXPRESS)
 
-#include "Adafruit_seesaw.h"
-#include <Adafruit_LIS3DH.h>
+//#include "Adafruit_seesaw.h"
+//#include <Adafruit_LIS3DH.h>
 #include <Adafruit_ST7789.h>
 
 #define ARCADA_TFT_SPI SPI
@@ -26,13 +26,13 @@
 
 #define ARCADA_USE_JSON
 
-#define SS_LIGHTSENSOR_PIN 2
-#define SS_VCCSENSOR_PIN 3
-#define SS_BACKLIGHT_PIN 5
-#define SS_TFTRESET_PIN 8
-#define SS_SWITCH1_PIN 9
-#define SS_SWITCH2_PIN 10
-#define SS_SWITCH3_PIN 11
+//#define SS_LIGHTSENSOR_PIN 2
+//#define SS_VCCSENSOR_PIN 3
+//#define SS_BACKLIGHT_PIN 5
+//#define SS_TFTRESET_PIN 8
+//#define SS_SWITCH1_PIN 9
+//#define SS_SWITCH2_PIN 10
+//#define SS_SWITCH3_PIN 11
 
 #define ARCADA_CALLBACKTIMER 3
 #define ARCADA_CALLBACKTIMER_HANDLER TC3_Handler
@@ -41,7 +41,7 @@
 
 class Adafruit_Arcada : public Adafruit_Arcada_SPITFT {
 public:
-  Adafruit_LIS3DH *accel = NULL;
+  //Adafruit_LIS3DH *accel = NULL;
   //Adafruit_seesaw ss;
   Adafruit_ST7789 *display2, *_display; // we need to keep a 'copy' of the
                                         // ST7789 version of both displays
@@ -73,13 +73,13 @@ public:
 	digitalWrite(A2, HIGH);
 	delay(10);
 
-    accel = new Adafruit_LIS3DH();
+    /*accel = new Adafruit_LIS3DH();
     if (!accel->begin(0x18) && !accel->begin(0x19)) {
       _has_accel = false; // couldn't find accelerometer, could be a pybadge LC
     } else {
       _has_accel = true;
       accel->setRange(LIS3DH_RANGE_4_G); // 2, 4, 8 or 16 G!
-    }
+    }*/
 
     return true;
   }

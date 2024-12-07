@@ -43,6 +43,15 @@
 // right. From an observer's point of view, looking AT the monster, the
 // "right eye" is on the left.
 
+/////////////////////////////
+// Project Settings
+/////////////////////////////
+//
+// Tools→CPU Speed→180 MHz (overclock)
+// Tools→Optimize→Faster (-O3)
+// Tools→USB Stack→TinyUSB
+// 
+
 #if !defined(USE_TINYUSB)
   #error "Please select Tools->USB Stack->TinyUSB before compiling"
 #endif
