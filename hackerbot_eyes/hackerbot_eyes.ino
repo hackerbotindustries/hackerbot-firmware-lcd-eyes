@@ -169,8 +169,6 @@ void setup() {
   if(!arcada.filesysBegin())    fatal("No filesystem found!", 250);
 #endif
 
-  user_setup();
-
   arcada.displayBegin();
 
   // Backlight(s) off ASAP, they'll switch on after screen(s) init & clear
@@ -178,8 +176,11 @@ void setup() {
 
   DISPLAY_SIZE = min(ARCADA_TFT_WIDTH, ARCADA_TFT_HEIGHT);
 
+  unsigned long serialTimout = millis();
   Serial.begin(115200);
-  //while(!Serial) yield();
+  while(!Serial && millis() - serialTimout <= 5000);
+
+  user_setup();
 
   Serial.printf("Available RAM at start: %d\n", availableRAM());
   Serial.printf("Available flash at start: %d\n", arcada.availableFlash());
