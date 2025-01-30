@@ -1,6 +1,8 @@
 #if 1
 
+#include <SerialCmd.h>
 #include "globals.h"
+#include "HackerbotSerialCmd.h"
 
 /*
 Credit in these posts
@@ -27,8 +29,6 @@ https://forums.adafruit.com/viewtopic.php?p=904534
 
 #define SERIAL1_BAUD 115200 // make sure this matches the rate at which your sender is transmitting
 
-bool HandleSerialInput();
-
 // Since the serial read buffer may contain an incmplete message, it needs
 // to persist between calls to user_loop, thus this global.
 // Once a complete message has been recieved and parced IncomingString will be 
@@ -50,6 +50,11 @@ void SERCOM3_1_Handler() { Serial1.IrqHandler(); }
 void SERCOM3_2_Handler() { Serial1.IrqHandler(); }
 void SERCOM3_3_Handler() { Serial1.IrqHandler(); }
 
+// Set up the serial command processor
+HackerbotSerialCmd mySerCmd(Serial1);
+
+static int count = 0;
+
 // HOW TO WIRE!
 // To be VERY CLEAR
 // When wiring up the monster mask to use this code
@@ -60,6 +65,33 @@ void SERCOM3_3_Handler() { Serial1.IrqHandler(); }
 // * The other 2 pins are +5 and Ground. You can _almost_ ignore those unless you want to power whatever is sending you serial (not recommended for anything that takes more current than a PWM microphone)
 // * it is good pratice to tie the ground to ground somewhere, and for long cables twist the cable bundle gently so the ground wire wraps around TX and RX
 
+void sendOK(void) {
+  mySerCmd.Print((char *) "OK\r\n");
+}
+
+void set_GAZE(void) {
+  float newEyeTargetX = 0.0;
+  float newEyeTargetY = 0.0;
+
+  if (!mySerCmd.ReadNextFloat(&newEyeTargetX) || !mySerCmd.ReadNextFloat(&newEyeTargetY)) {
+    mySerCmd.Print((char *) "ERROR: Missing parameter\r\n");
+    return;
+  }
+
+  moveEyesRandomly = false;
+
+  // Constrain values to acceptable range
+  eyeTargetX = constrain(newEyeTargetX, -1.0, 1.0);
+  eyeTargetY = constrain(newEyeTargetY, -1.0, 1.0);
+
+  char buf[128] = {0};
+  sprintf(buf, "STATUS: Updated: eyeTarget: %0.2f, %0.2f\r\n", eyeTargetX, eyeTargetY);
+  mySerCmd.Print(buf);
+
+  count = 0;
+
+  sendOK();
+}
 
 void user_setup(void) 
 {
@@ -69,20 +101,23 @@ void user_setup(void)
 /*      while (!Serial)
         yield();*/
     //}
-  Serial.println();
-  Serial.println();
-  Serial.println("Serial1 control over Monster M4SK Eyes");
-  Serial.printf("Setting up PWM port to be Serial port 1 TX and RX are %d %d",PIN_SERIAL1_TX,PIN_SERIAL1_RX);
-  Serial.println();
+  char buf[128] = {0};
+
+  mySerCmd.Print((char *) "\r\n\r\n");
+  mySerCmd.Print((char *) "Serial1 control over Monster M4SK Eyes\r\n");
+  sprintf(buf, "Setting up PWM port to be Serial port 1 TX and RX are %d %d\r\n",PIN_SERIAL1_TX,PIN_SERIAL1_RX);
+  mySerCmd.Print(buf);
 
   Serial1.begin(SERIAL1_BAUD);
   
   while (!Serial1)
   {
-    Serial.print(".");
+    mySerCmd.Print((char *) ".");
   }
-  Serial.printf("Serial1 started successfully at %d Baud and ready to read",SERIAL1_BAUD);
-  Serial.println();
+  sprintf(buf, "Serial1 started successfully at %d Baud and ready to read\r\n",SERIAL1_BAUD);
+  mySerCmd.Print(buf);
+
+  mySerCmd.AddCmd("GAZE", SERIALCMD_FROMALL, set_GAZE);
 }
 
 // Called once after the processing of the configuration file. This allows
@@ -91,74 +126,22 @@ void user_setup(void)
 void user_setup(StaticJsonDocument<2048> &doc) {
 }
 
-// Since the serial read buffer may contain an incmplete message, it needs
-// to persist between calls to user_loop, thus this global
-// Once a complete message has been recieved and parced IncomingString will be 
-// emptied so the next message can be processed during the next call to user_loop
-
-bool HandleSerialInput()
-{
-  char c;
-  bool ret = false;
-  if(Serial1.available()>0) // hey there is something there
-  {
-    while(Serial1.available()>0)
-    {
-          IncomingString += (char)Serial1.read();
-    }
-    
-    if(IncomingString.endsWith("\n") || IncomingString.endsWith("\n "))
-    {
-      //Serial.printf("Received: '%s'", IncomingString.c_str());
-      //Serial.println();
-
-      int8_t newEyeTargetX, newEyeTargetY = 0;
-      IncomingString.trim();
-      //Serial.printf("Parsing '%s'...", IncomingString.c_str());
-      //Serial.println();
-      sscanf(IncomingString.c_str(), "GAZE,%d,%d", &newEyeTargetX, &newEyeTargetY);
-
-      //Serial.printf("Updating gaze - newEyeTarget: %d, %d", newEyeTargetX, newEyeTargetY);
-      //Serial.println();
-
-      moveEyesRandomly = false; // stop random eye movement TODO: Time this to prevent jerking
-
-      eyeTargetX = (float(newEyeTargetX) / 100.0);
-      eyeTargetY = (float(newEyeTargetY) / 100.0);
-
-      Serial.printf("Updated eyeTarget: %.2f, %.2f", eyeTargetX, eyeTargetY);
-      Serial.println();
-      Serial.println();
-
-      ret = true;
-      IncomingString.remove(0); // empty the string
-    }
-    else
-    {
-      // incomplete message, just throw it away, something may be going wrong
-      Serial.printf("Reached end of buffer before EOM: '%s'", IncomingString.c_str());
-      Serial.println();
-    }
-  }
-  return(ret); 
-
-}
-
-static int count = 0;
 void user_loop(void) {
+  int8_t ret;
 
-
-  if (!HandleSerialInput())
-  {
-    count++;
-    if(count > 100) // no faces found so we do a non time based delay before randomly looking around again
-     moveEyesRandomly = true;
-  }
-  else
-  {
+  // Check for and run incoming serial commands
+  ret = mySerCmd.ReadSer();
+  if (ret == 1) { // we processed a command, reset the return-to-random counter:
     count = 0;
+  } else {
+    if (ret == 0) {
+      mySerCmd.Print((char *) "ERROR: Urecognized command\r\n");
+    }
+    count++;
+    if (count > 100) { // After no valid override command for 100 ticks, return to random movement
+      moveEyesRandomly = true;
+    }
   }
-
 }
 
 
