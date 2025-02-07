@@ -1,6 +1,8 @@
 #if 1
 
+#include <SerialCmd.h>
 #include "globals.h"
+#include "HackerbotSerialCmd.h"
 
 /*
 Credit in these posts
@@ -25,50 +27,13 @@ https://forums.adafruit.com/viewtopic.php?p=904534
 // * The other 2 pins are +5 and Ground. You can _almost_ ignore those unless you want to power whatever is sending you serial (not recommended for anything that takes more current than a PWM microphone)
 // * it is good pratice to tie the ground to ground somewhere, and for long cables twist the cable bundle gently so the ground wire wraps around TX and RX
 
-
-// User globals can go here, recommend declaring as static, e.g.:
-static int foo = 42;
-static int bar = ((13.8 * 10) / 2) ; // a nice number
-
 #define SERIAL1_BAUD 115200 // make sure this matches the rate at which your sender is transmitting
-
-// USE the same format string from the sister project to this one
-// for example ../ESP32-Eye-Tracker/FaceRepoting.h
-// ideally we would just include that here, but for a good explination
-// why we can't google " arduino include headder files from other directories"
-static const char FaceLocationRangeReportFormat[] = " Face found = %i X = %i Y = %i W = %i H = %i W_Min = %i H_Min = %i W_Max = %i H_Max = %i\n ";
-
-typedef struct {
-  int IS; // != 1 face not found or data tx/rx muck up co=ords are invalid
-  int X; // X co-ord of face
-  int Y; // Y co-ord of face
-  int W; // maximum value along the horizontal, Should be <= SCREEN_WIDTH
-  int H; // maximum value along the vertical, should be <= SCREEN_HEIGHT
-  
-  // A face detected in the field of view will never have it's X and Y values
-  // be either 0 or the maximum bounds of the edge of the FOV. 
-  // ALSO, resolution could be changed dynamically
-  // So we send along the minimum and maximum values along X and Y we have seen
-  // this allows the Reciever to decide how to map the range of X and Y 
-  // more dynamiclly and approprately
-  // this will mean that X and Y will need to be mapped based on a range that is 
-  // assumed to be changing for each frame. 
-  int W_Min; // minimum range of the horizontal, should be >= 0 and <= W
-  int H_Min; // minimum range of the vertical, should be >= 0 and <= H
-  int W_Max; // minimum range of the horizontal, should be >= 0 and <= W
-  int H_Max; // minimum range of the vertical, should be >= 0 and <= H
-
-} FaceLocationStruct;
-
-bool HandelSerialInput();
-void ParceIncomingString( String str, FaceLocationStruct* fat );
-void LookAt(FaceLocationStruct* fat);
 
 // Since the serial read buffer may contain an incmplete message, it needs
 // to persist between calls to user_loop, thus this global.
 // Once a complete message has been recieved and parced IncomingString will be 
 // emptied so the next message can be processed during the next call to user_loop
-String IncomingString = String(" ");
+String IncomingString = String("");
 
 
 // HERE BE MAGIC!
@@ -85,6 +50,11 @@ void SERCOM3_1_Handler() { Serial1.IrqHandler(); }
 void SERCOM3_2_Handler() { Serial1.IrqHandler(); }
 void SERCOM3_3_Handler() { Serial1.IrqHandler(); }
 
+// Set up the serial command processor
+HackerbotSerialCmd mySerCmd(Serial1);
+
+static int count = 0;
+
 // HOW TO WIRE!
 // To be VERY CLEAR
 // When wiring up the monster mask to use this code
@@ -95,6 +65,33 @@ void SERCOM3_3_Handler() { Serial1.IrqHandler(); }
 // * The other 2 pins are +5 and Ground. You can _almost_ ignore those unless you want to power whatever is sending you serial (not recommended for anything that takes more current than a PWM microphone)
 // * it is good pratice to tie the ground to ground somewhere, and for long cables twist the cable bundle gently so the ground wire wraps around TX and RX
 
+void sendOK(void) {
+  mySerCmd.Print((char *) "OK\r\n");
+}
+
+void set_GAZE(void) {
+  float newEyeTargetX = 0.0;
+  float newEyeTargetY = 0.0;
+
+  if (!mySerCmd.ReadNextFloat(&newEyeTargetX) || !mySerCmd.ReadNextFloat(&newEyeTargetY)) {
+    mySerCmd.Print((char *) "ERROR: Missing parameter\r\n");
+    return;
+  }
+
+  moveEyesRandomly = false;
+
+  // Constrain values to acceptable range
+  eyeTargetX = constrain(newEyeTargetX, -1.0, 1.0);
+  eyeTargetY = constrain(newEyeTargetY, -1.0, 1.0);
+
+  char buf[128] = {0};
+  sprintf(buf, "STATUS: Updated: eyeTarget: %0.2f, %0.2f\r\n", eyeTargetX, eyeTargetY);
+  mySerCmd.Print(buf);
+
+  count = 0;
+
+  sendOK();
+}
 
 void user_setup(void) 
 {
@@ -104,18 +101,23 @@ void user_setup(void)
 /*      while (!Serial)
         yield();*/
     //}
-  Serial.println("\n Serial1 control over Monster M4SK Eyes");
-  Serial.printf("\n Setting up PWM port to be Serial port 1 TX and RX are %d %d\n",PIN_SERIAL1_TX,PIN_SERIAL1_RX);
-  // If I knew what those pins where defined as....
-  
+  char buf[128] = {0};
+
+  mySerCmd.Print((char *) "\r\n\r\n");
+  mySerCmd.Print((char *) "Serial1 control over Monster M4SK Eyes\r\n");
+  sprintf(buf, "Setting up PWM port to be Serial port 1 TX and RX are %d %d\r\n",PIN_SERIAL1_TX,PIN_SERIAL1_RX);
+  mySerCmd.Print(buf);
 
   Serial1.begin(SERIAL1_BAUD);
   
   while (!Serial1)
   {
-    Serial.print(".");
+    mySerCmd.Print((char *) ".");
   }
-  Serial.printf("\n Serial1 started successfully at %d Baud and ready to read\n",SERIAL1_BAUD);
+  sprintf(buf, "Serial1 started successfully at %d Baud and ready to read\r\n",SERIAL1_BAUD);
+  mySerCmd.Print(buf);
+
+  mySerCmd.AddCmd("GAZE", SERIALCMD_FROMALL, set_GAZE);
 }
 
 // Called once after the processing of the configuration file. This allows
@@ -123,142 +125,23 @@ void user_setup(void)
 #include <ArduinoJson.h>          // JSON config file functions
 void user_setup(StaticJsonDocument<2048> &doc) {
 }
-/*
- * Handel Serial Input, 
- * This function is called once for each time user_loop is called
- * BUT
- * Sometimes the serial buffer will not contain a complete F,X,Y,W,H message
- * Soooo
- */
 
-// Since the serial read buffer may contain an incmplete message, it needs
-// to persist between calls to user_loop, thus this global
-// Once a complete message has been recieved and parced IncomingString will be 
-// emptied so the next message can be processed during the next call to user_loop
-
-
-
-bool HandelSerialInput()
-{
-  char c;
-  bool ret = false;
-  if(Serial1.available()>0) // hey there is something there
-  {
-    while(Serial1.available()>0)
-    {
-          IncomingString += (char)Serial1.read();
-    }
-    
-    if(IncomingString.endsWith("\n") || IncomingString.endsWith("\n "))
-    {
-      FaceLocationStruct FaceAt;
-      ret = true;
-      Serial.print("Full Message : ");
-      Serial.println(IncomingString);
-      
-      ParceIncomingString(IncomingString,  &FaceAt);
-      ret = true;
-      IncomingString.remove(1); // empty the string
-      moveEyesRandomly = false; // stop random eye movement TODO: Time this to prevent jerking
-      LookAt( &FaceAt );
-    }
-    else
-    {
-      Serial.print(IncomingString);
-      Serial.println(" Reached end of buffer before EOM");
-      // incomplete message, just throw it away, something may be goig wrong
-
-    }
-  }
-  return(ret); 
-
-}
-/*
- * This function is called when a full set of co-ordinates have been read in. 
- * The message that comes from the camrea is pretty verbose, makes it handy for debugging
- * it will look something like Face "found = 1 X = 147 Y = 147 W = 240 H = 320\n"
- * it _may_ have leading and trailing spaces or stuff...
- * in the code running on the other microcontroller, or computer or whatever 
- * Simply copy the sprintf fuction from the sener and reverse it with scanf here. 
- * 
- */
-void ParceIncomingString( String str, FaceLocationStruct* fat  )
-{
-  str.trim(); // remove leading and trailing whitespace
-  sscanf(str.c_str(),FaceLocationRangeReportFormat, 
-                      &fat->IS,
-                      &fat->X,
-                      &fat->Y,
-                      &fat->W,
-                      &fat->H,
-                      &fat->W_Min,
-                      &fat->H_Min,
-                      &fat->W_Max,
-                      &fat->H_Max
-                      );
-
-  Serial.printf(FaceLocationRangeReportFormat, 
-                      fat->IS,
-                      fat->X,
-                      fat->Y,
-                      fat->W,
-                      fat->H,
-                      fat->W_Min,
-                      fat->H_Min,
-                      fat->W_Max,
-                      fat->H_Max       
-                      );
-}
-
-// point the eyes at a location
-
-void LookAt(FaceLocationStruct* fat)
-{
-
-
-  // X is some % of the distance from W_Min to W_Max inclusive (X could be = W_Min or max)
-  // Y is some % of the distance from H_Min to H_Max inclusive (X could be = H_Min or max)
-
-  // the range for eyeTargetX is a Float value between -1 and 1 with 0 being stright forward
-  // the range for eyeTargetY is a float value between -1 and 1 with a 0 being straight forward
-
-  // This is why the map() function exists. Because we all had to learn x is what percent of Y in algebra
-  // and because the arduino map function can return out of range values...
-  // this is why the constrain() function exists
-
-  // BUUUT... the X and Y values don't actually go from 0 to W and H
-
-  float screenX,screenY;
-    eyeTargetX = (
-                  (float)constrain(
-                    map(fat->X, fat->W_Min, fat->W_Max, -10000, 10000),    // Need to map X which is an int to a float value between -1 and 1
-                  -10000, 10000)
-                  ) / (float)10000.0000;                       // so I map to a range that is [-1,1]x10000 then just divide the result by 10000 as a float. 
-                
-    eyeTargetY = (
-                  (float)constrain(                                 // see commentary in rendering code for why -y
-                    map(fat->Y, fat->H_Min, fat->H_Max, -10000, 10000),    // where would X be if it was in a range of DISPLAY_SIZE
-                  -10000, 10000)
-                  ) / (float)10000.0000;
-
-  Serial.printf("Mapped values are %f , %f \n", eyeTargetX, eyeTargetY);
-}
-
-static int count = 0;
 void user_loop(void) {
+  int8_t ret;
 
-
-  if (!HandelSerialInput())
-  {
-    count++;
-    if(count > 100) // no faces found so we do a non time based delay before randomly looking around again
-     moveEyesRandomly = true;
-  }
-  else
-  {
+  // Check for and run incoming serial commands
+  ret = mySerCmd.ReadSer();
+  if (ret == 1) { // we processed a command, reset the return-to-random counter:
     count = 0;
+  } else {
+    if (ret == 0) {
+      mySerCmd.Print((char *) "ERROR: Urecognized command\r\n");
+    }
+    count++;
+    if (count > 100) { // After no valid override command for 100 ticks, return to random movement
+      moveEyesRandomly = true;
+    }
   }
-
 }
 
 
