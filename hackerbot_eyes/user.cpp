@@ -1,8 +1,20 @@
+/*********************************************************************************
+Hackerbot Industries, LLC
+Created: April 2024
+Updated: 2025.03.11
+
+Special thanks to the following for their code contributions to this codebase:
+Randy - https://github.com/rbeiter
+
+Version 3
+*********************************************************************************/
+
+
 #if 1
 
 #include <SerialCmd.h>
 #include "globals.h"
-#include "HackerbotSerialCmd.h"
+#include "SerialCmd_Helper.h"
 
 /*
 Credit in these posts
@@ -51,7 +63,7 @@ void SERCOM3_2_Handler() { Serial1.IrqHandler(); }
 void SERCOM3_3_Handler() { Serial1.IrqHandler(); }
 
 // Set up the serial command processor
-HackerbotSerialCmd mySerCmd(Serial1);
+SerialCmdHelper mySerCmd(Serial1);
 
 static int count = 0;
 
@@ -135,7 +147,7 @@ void user_loop(void) {
     count = 0;
   } else {
     if (ret == 0) {
-      mySerCmd.Print((char *) "ERROR: Urecognized command\r\n");
+      mySerCmd.Print((char *) "ERROR: Unrecognized command\r\n");
     }
     count++;
     if (count > 100) { // After no valid override command for 100 ticks, return to random movement
