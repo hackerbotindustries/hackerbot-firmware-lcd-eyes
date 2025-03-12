@@ -1,7 +1,8 @@
 /*********************************************************************************
 Hackerbot Industries, LLC
-Created: April 2024
-Updated: 2025.03.11
+Created By: Ian bernstein
+Created:    April 2024
+Updated:    2025.03.11
 
 Special thanks to the following for their code contributions to this codebase:
 Randy - https://github.com/rbeiter
