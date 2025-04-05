@@ -11,6 +11,7 @@ This sketch adds some supplimental helper functions related to the SerialCmd lib
 
 Special thanks to the following for their code contributions to this codebase:
 Ian Bernstein - https://github.com/arobodude
+Randy Beiter - https://github.com/rbeiter
 *********************************************************************************/
 
 
