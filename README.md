@@ -1,4 +1,4 @@
-# fw_lcd_eyes
+# Hackerbot-Firmwware-LCD-EYES
 Firmware code for the Arduino (Atmel ATSAMD51G) on the right LCD PCBA. Programmed via the Micro USB port on the top of the right eye
 
 Note:
